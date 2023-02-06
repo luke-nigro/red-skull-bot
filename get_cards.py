@@ -20,6 +20,6 @@ class Card():
         # loop through each record in the data
         for record in data:
             # check if the record has the given cname
-            if record["cname"] == card_name:
+            if " ".join([word.capitalize() for word in record['cname'].replace("-", " ").split()]) == card_name:
                 # found the record, print it
                 return record

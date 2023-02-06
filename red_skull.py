@@ -24,9 +24,10 @@ async def get_card(message, *, arg):
     try:
         card = Card(correct_case)
         embed.clear_fields()
+        embed.title = card.card_name
         embed.add_field(name='Ability', value=card.ability, inline=False)
-        embed.add_field(name='Cost', value=card.cost, inline=False)
-        embed.add_field(name='Power', value=card.power, inline=False)
+        embed.add_field(name='Cost', value=card.cost, inline=True)
+        embed.add_field(name='Power', value=card.power, inline=True)
         embed.set_image(url=card.image)
         embed.set_footer(text='Created by unlimited_powah')
 
