@@ -16,6 +16,11 @@ async def on_message(message):
     quote = 'Red Skull will fuck your day up.'
     await message.send(quote)
 
+@bot.command(name='cringe')
+async def on_message(message):
+    quote = 'day'
+    await message.send(quote)
+
 @bot.command(name='card')
 async def get_card(message, *, arg):
     
