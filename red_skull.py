@@ -7,7 +7,7 @@ from get_cards import Card
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-embed = Embed(title='Card Viewer')
+embed = Embed()
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
@@ -25,6 +25,8 @@ async def get_card(message, *, arg):
         card = Card(correct_case)
         embed.clear_fields()
         embed.title = card.card_name
+        embed.color = discord.Color.blue()
+        embed.url = card.webpage
         embed.add_field(name='Ability', value=card.ability, inline=False)
         embed.add_field(name='Cost', value=card.cost, inline=True)
         embed.add_field(name='Power', value=card.power, inline=True)
