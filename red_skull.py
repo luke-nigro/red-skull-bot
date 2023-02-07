@@ -54,12 +54,12 @@ async def get_card(message, *, arg):
         embed.color = discord.Color.blue()
 
         ### TODO ADD MarvelSnapZone page links
-        # embed.url = loc.webpage
+        embed.url = loc.webpage
         embed.add_field(name='Location', value=loc.loc_name, inline=False)
         embed.add_field(name='Effect', value=loc.effect, inline=False)
 
         ### TODO: ADD LOCATION IMAGE URLS TO JSON FILE
-        # embed.set_image(url=loc.image)
+        embed.set_image(url=loc.image)
         embed.set_footer(text='Created by unlimited_powah')
 
         await message.send(embed = embed)

@@ -31,6 +31,8 @@ class Location():
 
         self.loc_name = record['Location']
         self.effect = record['Effect']
+        self.webpage = record['url']
+        self.image = record['image']
 
     def get_record(self, loc_name):
     # load the json file into memory
