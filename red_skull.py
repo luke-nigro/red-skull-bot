@@ -21,6 +21,10 @@ async def on_message(message):
     quote = 'day'
     await message.send(quote)
 
+@bot.command(name='ban')
+async def on_message(message, *, arg):
+    await message.send('User {user} has been permanently banned from the server, what a loser! :day:'.format(user=arg))
+
 @bot.command(name='card')
 async def get_card(message, *, arg):
     
