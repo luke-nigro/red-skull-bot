@@ -13,7 +13,7 @@ bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
 @bot.command(name='skull')
 async def on_message(message):
-    quote = 'Red Skull will fuck your day up.'
+    quote = 'Leave Red Skull alone, please. I beg of you.'
     await message.send(quote)
 
 @bot.command(name='cringe')

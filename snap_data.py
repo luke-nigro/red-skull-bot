@@ -1,4 +1,5 @@
 import json
+import re
 
 class Card():
 
@@ -17,10 +18,11 @@ class Card():
         with open("data/cards.json", "r") as json_file:
             data = json.load(json_file)
 
+        card_name_corrected = re.sub(r'[^\w]', '', card_name).lower()
         # loop through each record in the data
         for record in data:
             # check if the record has the given cname
-            if " ".join([word.capitalize() for word in record['cname'].replace("-", " ").split()]) == card_name:
+            if record['name'] == card_name_corrected:
                 # found the record, print it
                 return record
 
