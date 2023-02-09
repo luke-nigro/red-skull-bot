@@ -2,8 +2,10 @@ import os
 import discord
 from discord import Embed
 from discord.ext import commands
+import dotenv
 from snap_data import Card, Location
 
+dotenv.load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 embed = Embed()
 
@@ -23,11 +25,9 @@ async def on_message(message, *, arg):
 
 @bot.command(name='card')
 async def get_card(message, *, arg):
-    
-    correct_case = " ".join([word.capitalize() for word in arg.split()])
 
     try:
-        card = Card(correct_case)
+        card = Card(arg)
         embed.clear_fields()
         embed.title = card.card_name
         embed.color = discord.Color.blue()
@@ -53,12 +53,10 @@ async def get_card(message, *, arg):
         embed.title = loc.loc_name
         embed.color = discord.Color.blue()
 
-        ### TODO ADD MarvelSnapZone page links
         embed.url = loc.webpage
         embed.add_field(name='Location', value=loc.loc_name, inline=False)
         embed.add_field(name='Effect', value=loc.effect, inline=False)
 
-        ### TODO: ADD LOCATION IMAGE URLS TO JSON FILE
         embed.set_image(url=loc.image)
         embed.set_footer(text='Created by unlimited_powah')
 
