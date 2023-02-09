@@ -11,13 +11,11 @@ bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
 @bot.command(name='skull')
 async def on_message(message):
-    quote = 'Leave Red Skull alone, please. I beg of you.'
-    await message.send(quote)
+    await message.send('Leave Red Skull alone, please. I beg of you.')
 
 @bot.command(name='cringe')
 async def on_message(message):
-    quote = 'day'
-    await message.send(quote)
+    await message.send('day')
 
 @bot.command(name='ban')
 async def on_message(message, *, arg):
