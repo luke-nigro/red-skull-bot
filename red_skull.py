@@ -2,10 +2,8 @@ import os
 import discord
 from discord import Embed
 from discord.ext import commands
-import dotenv
 from snap_data import Card, Location
 
-dotenv.load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 embed = Embed()
 
