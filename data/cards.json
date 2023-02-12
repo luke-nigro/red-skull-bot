@@ -1325,7 +1325,7 @@
         "type": "Character",
         "art": "https://marvelsnapzone.com/wp-content/themes/blocksy-child/assets/media/cards/kitty-pryde.webp?v=25",
         "url": "https://marvelsnapzone.com/cards/kitty-pryde",
-        "ability": "You can pull this back to your hand at any time.",
+        "ability": "You can return this to your hand to gain +1 Power.",
         "cost": "1",
         "power": "2",
         "carddefid": "KittyPryde",
