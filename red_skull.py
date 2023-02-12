@@ -17,6 +17,10 @@ async def on_message(message):
 async def on_message(message):
     await message.send('day')
 
+@bot.command(name='bonk')
+async def on_message(message):
+    await message.send('https://media2.giphy.com/avatars/DogeBONK/coZ41g2NwRFS.gif')
+
 @bot.command(name='ban')
 async def on_message(message, *, arg):
     await message.send('User {user} has been permanently banned from the server, what a loser! <:day:1072575755256598559>'.format(user=arg))
