@@ -29,7 +29,7 @@ async def on_message(message, *, arg):
 @bot.command(name='roll')
 async def on_message(message, *, arg):
     try:
-        roll = random.randint(1,arg)
+        roll = random.randint(1,int(arg))
         await message.send("A `d{d}` was rolled and you got `{num}`.".format(d=arg, num=roll))
     except:
         await message.send("That's not a number you moron, pick a different number")
