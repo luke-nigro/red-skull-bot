@@ -1,6 +1,7 @@
 import os
 import random
 import discord
+import datetime
 from discord import Embed, Client
 from discord.ext import commands
 from snap_data import Card, Location
@@ -35,13 +36,18 @@ async def on_message(message, *, arg):
     except:
         await message.send("That's not a number you moron, pick a different number")
 
-# @client.event
-# async def on_message(message):
-#     if 'cringe' in message.content:
-#         await message.send('cringe detected')
-    # else:
-    #     await message.send('no cringe detected here')
-
+@bot.event
+async def on_message(message):
+    if 'cringe' in message.content.lower():
+        roll = random.randint(1,100)
+        if roll == 1:
+            try:
+                await message.author.timeout(datetime.timedelta(minutes=1))
+            except:
+                pass
+            await message.reply('{user} has been timed out for being cringy, what an idiot!'.format(user=message.author))
+        else:
+            await message.reply('got away with it this time')
 
 @bot.command(name='card')
 async def get_card(message, *, arg):
