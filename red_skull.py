@@ -1,4 +1,5 @@
 import os
+import random
 import discord
 from discord import Embed
 from discord.ext import commands
@@ -24,6 +25,14 @@ async def on_message(message):
 @bot.command(name='ban')
 async def on_message(message, *, arg):
     await message.send('User {user} has been permanently banned from the server, what a loser! <:day:1072575755256598559>'.format(user=arg))
+
+@bot.command(name='roll')
+async def on_message(message, *, arg):
+    try:
+        roll = random.randint(1,arg)
+        await message.send("A `d{d}` was rolled and you got `{num}`.".format(d=arg, num=roll))
+    except:
+        await message.send("That's not a number you moron, pick a different number")
 
 @bot.command(name='card')
 async def get_card(message, *, arg):
