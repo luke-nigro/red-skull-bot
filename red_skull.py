@@ -1,7 +1,7 @@
 import os
 import random
 import discord
-from discord import Embed
+from discord import Embed, Client
 from discord.ext import commands
 from snap_data import Card, Location
 
@@ -9,7 +9,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 embed = Embed()
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
-client = discord.Client()
+client = Client()
 
 @bot.command(name='skull')
 async def on_message(message):
