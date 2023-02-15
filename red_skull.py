@@ -9,6 +9,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 embed = Embed()
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
+client = discord.Client()
 
 @bot.command(name='skull')
 async def on_message(message):
@@ -34,7 +35,7 @@ async def on_message(message, *, arg):
     except:
         await message.send("That's not a number you moron, pick a different number")
 
-@bot.listen()
+@client.event
 async def on_message(message):
     if 'cringe' in message.content:
         await message.send('cringe detected')
