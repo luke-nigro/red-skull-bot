@@ -3,7 +3,6 @@ import random
 import discord
 from discord import Embed
 from discord.ext import commands
-from discord import Client
 from snap_data import Card, Location
 
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -35,7 +34,7 @@ async def on_message(message, *, arg):
     except:
         await message.send("That's not a number you moron, pick a different number")
 
-@bot.event
+@bot.listen()
 async def on_message(message):
     if 'cringe' in message.content:
         await message.send('cringe detected')
