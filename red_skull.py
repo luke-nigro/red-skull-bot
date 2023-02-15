@@ -9,7 +9,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 embed = Embed()
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
-client = Client()
+# client = Client()
 
 @bot.command(name='skull')
 async def on_message(message):
@@ -35,10 +35,10 @@ async def on_message(message, *, arg):
     except:
         await message.send("That's not a number you moron, pick a different number")
 
-@client.event
-async def on_message(message):
-    if 'cringe' in message.content:
-        await message.send('cringe detected')
+# @client.event
+# async def on_message(message):
+#     if 'cringe' in message.content:
+#         await message.send('cringe detected')
     # else:
     #     await message.send('no cringe detected here')
 
