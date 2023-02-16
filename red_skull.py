@@ -1,7 +1,7 @@
 import os
 import random
 import discord
-import datetime
+import asyncio
 from discord import Embed
 from discord.ext import commands
 from snap_data import Card, Location
@@ -39,13 +39,15 @@ async def on_message(message, *, arg):
 async def on_message(message):
     await bot.process_commands(message)
     if 'cringe' in message.content.lower():
-        roll = random.randint(1,100)
+        roll = random.randint(1,10)
         if roll == 1:
-            try:
-                await message.author.timeout(datetime.timedelta(minutes=1))
-            except:
-                pass
-            await message.reply('{user} has been timed out for being cringy, what an idiot!'.format(user=message.author))
+                    # Prevent the member from sending messages in the current text channel for 1 minute
+            overwrite = discord.PermissionOverwrite()
+            overwrite.send_messages = False
+            await message.channel.set_permissions(message.author, overwrite=overwrite, reason="Timed out for using a banned word")
+            await message.reply('{auth} has been timed out for being cringy, what an idiot!'.format(auth=message.author))
+            await asyncio.sleep(60)  # Wait for 1 minute
+            await message.channel.set_permissions(message.author, overwrite=None, reason="Timeout expired")
         else:
             await message.reply('got away with it this time')
 
