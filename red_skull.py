@@ -19,6 +19,10 @@ async def on_message(message):
 async def on_message(message):
     await message.send('day')
 
+@bot.command(name='squash')
+async def on_message(message):
+    await message.send("Squash I'm going to need you to relax ok?")
+
 @bot.command(name='bonk')
 async def on_message(message):
     await message.send('https://media2.giphy.com/avatars/DogeBONK/coZ41g2NwRFS.gif')
