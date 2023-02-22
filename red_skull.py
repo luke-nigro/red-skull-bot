@@ -39,15 +39,15 @@ async def on_message(message, *, arg):
 async def on_message(message):
     await bot.process_commands(message)
     if 'cringe' in message.content.lower():
-        roll = random.randint(1,10)
+        roll = random.randint(1, 10)
         if roll == 1:
-                    # Prevent the member from sending messages in the current text channel for 1 minute
+            # Prevent the member from sending messages in all text channels on the server for 1 minute
             overwrite = discord.PermissionOverwrite()
             overwrite.send_messages = False
-            await message.channel.set_permissions(message.author, overwrite=overwrite, reason="Timed out for using a banned word")
+            await asyncio.gather(*[channel.set_permissions(message.author, overwrite=overwrite, reason="Timed out for using a banned word") for channel in message.guild.text_channels])
             await message.reply('{auth} has been timed out for being cringy, what an idiot!'.format(auth=message.author))
             await asyncio.sleep(60)  # Wait for 1 minute
-            await message.channel.set_permissions(message.author, overwrite=None, reason="Timeout expired")
+            await asyncio.gather(*[channel.set_permissions(message.author, overwrite=None, reason="Timeout expired") for channel in message.guild.text_channels])
         else:
             await message.reply('got away with it this time')
 
