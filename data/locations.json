@@ -639,4 +639,34 @@
     "Effect": "After you play a card here, set its base Power to 2.",
     "image":"https://marvelsnapzone.com/wp-content/themes/blocksy-child/assets/media/cards/quantum-realm.webp?v=44",
     "url":"https://marvelsnapzone.com/locations/quantum-realm/"
+},
+{
+    "Location": "Orchis Forge",
+    "Effect": "After you play a card here, add a Sentinel to your hand",
+    "image":"https://marvelsnapzone.com/wp-content/themes/blocksy-child/assets/media/cards/orchis-forge.webp?v=44",
+    "url":"https://marvelsnapzone.com/locations/orchis-forge/"
+},
+{
+    "Location": "Asteroid M",
+    "Effect": "After you play a 3 or 4-Cost card, move it here.",
+    "image":"https://marvelsnapzone.com/wp-content/themes/blocksy-child/assets/media/cards/asteroid-m.webp?v=44",
+    "url":"https://marvelsnapzone.com/locations/asteroid-m"
+},
+{
+    "Location": "Krakoa",
+    "Effect": "On turn 5, takes over and plays both players’ cards for them.",
+    "image":"https://marvelsnapzone.com/wp-content/themes/blocksy-child/assets/media/cards/krakoa.webp?v=44",
+    "url":"https://marvelsnapzone.com/locations/krakoa/"
+},
+{
+    "Location": "Pet Mansion",
+    "Effect": "This turn, all cards must be played here.",
+    "image":"https://marvelsnapzone.com/wp-content/themes/blocksy-child/assets/media/cards/pet-mansion.webp?v=44",
+    "url":"https://marvelsnapzone.com/locations/pet-mansion/"
+},
+{
+    "Location": "The Sandbar",
+    "Effect": "Cards with abilities can’t be played here.",
+    "image":"https://marvelsnapzone.com/wp-content/themes/blocksy-child/assets/media/cards/the-sandbar.webp?v=44",
+    "url":"https://marvelsnapzone.com/locations/the-sandbar/"
 }]
