@@ -26,6 +26,10 @@ async def on_message(message):
 async def on_message(message, *, arg):
     await message.send(f'User {arg} has been permanently banned from the server, what a loser! <:day:1072575755256598559>')
 
+@bot.command(name='boc')
+async def on_message(message):
+    await message.send("Claude told me you are wrong and that I am very smart. Trump is right about everything. My homeschooled kids will be totally normal.")
+
 @bot.command(name='roll')
 async def on_message(message, *, arg):
     if not arg.isdigit():
@@ -47,5 +51,11 @@ async def on_message(message):
         roll = random.randint(1, 100)
         if roll == 1:
             await message.reply("you're cringe bro")
+
+@bot.event
+async def on_message(message):
+    await bot.process_commands(message)
+    if 'cheney' in message.content.lower():
+        await message.reply("Shut up you idiot that’s not why the Dems lost the election.")
 
 bot.run(TOKEN)
