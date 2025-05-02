@@ -3,6 +3,7 @@ import random
 import discord
 from discord import Embed
 from discord.ext import commands
+import aiohttp  # Add this import for HTTP requests
 
 TOKEN = os.getenv('DISCORD_TOKEN')
 embed = Embed()
@@ -50,6 +51,36 @@ async def on_roll_command(message, *, arg):
     else:
         roll = random.randint(1, int(arg))
         await message.send(f"You rolled a {roll}.")
+
+@bot.command(name='meme')
+async def on_meme_command(message):
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://meme-api.com/gimme') as response:
+            if response.status == 200:
+                data = await response.json()
+                await message.send(data['url'])
+            else:
+                await message.send("Couldn't fetch a meme, and that's probably for the best tbh.")
+
+@bot.command(name='cat')
+async def on_cat_command(message):
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://api.thecatapi.com/v1/images/search') as response:
+            if response.status == 200:
+                data = await response.json()
+                await message.send(data[0]['url'])
+            else:
+                await message.send("The cat distribution system did not choose you today.")
+
+@bot.command(name='dog')
+async def on_dog_command(message):
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://dog.ceo/api/breeds/image/random') as response:
+            if response.status == 200:
+                data = await response.json()
+                await message.send(data['message'])
+            else:
+                await message.send("No dogs for you, this probably means you're a terrible person.")
 
 @bot.event
 async def on_cringe_message(message):
