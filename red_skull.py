@@ -30,6 +30,18 @@ async def on_message(message, *, arg):
 async def on_message(message):
     await message.send("Claude told me you are wrong and that I am very smart. Trump is right about everything. My homeschooled kids will be totally normal.")
 
+@bot.command(name='squash')
+async def on_message(message):
+    await message.send("Yeah man I'm going to need you to go ahead and calm down for me. Can you do that?")
+
+@bot.command(name='hastings')
+async def on_message(message):
+    await message.send("https://cdn.discordapp.com/attachments/1072494728492359732/1367960843660165200/8kxnz2icgq131.png?ex=68167c50&is=68152ad0&hm=2919a9cba02febadf631d53dd4ab50e1eb5a01f381c12a1cd8f67c13d42ec5c2&")
+
+@bot.command(name='kwiji')
+async def on_message(message):
+    await message.send("Your favorite ~~closeted christian boy~~ priest main!")
+
 @bot.command(name='roll')
 async def on_message(message, *, arg):
     if not arg.isdigit():
@@ -39,10 +51,6 @@ async def on_message(message, *, arg):
     else:
         roll = random.randint(1, int(arg))
         await message.send(f"You rolled a {roll}.")
-
-@bot.command(name='squash')
-async def on_message(message):
-    await message.send("Yeah man I'm going to need you to go ahead and calm down for me. Can you do that?")
 
 @bot.event
 async def on_message(message):
