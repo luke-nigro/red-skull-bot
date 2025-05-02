@@ -40,7 +40,7 @@ async def on_message(message):
 
 @bot.command(name='kwiji')
 async def on_message(message):
-    await message.send("Your favorite ~~closeted christian boy~~ priest main!")
+    await message.send("Your favorite ~~closeted Catholic boy~~ priest main!")
 
 @bot.command(name='roll')
 async def on_message(message, *, arg):
