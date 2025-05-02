@@ -42,6 +42,10 @@ async def on_hastings_command(message):
 async def on_kwiji_command(message):
     await message.send("Your favorite ~~closeted Catholic boy~~ priest main!")
 
+@bot.command(name='e10din')
+async def on_e10din_command(message):
+    await message.send("https://cdn.discordapp.com/attachments/1072494728492359732/1368008973973852170/IMG_5306.jpg?ex=6816a923&is=681557a3&hm=00904f1d19b05ea742279044e907915bd91834cc34260289c2f3f68f98985128&")
+
 @bot.command(name='roll')
 async def on_roll_command(message, *, arg):
     if not arg.isdigit():
