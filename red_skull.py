@@ -46,6 +46,10 @@ async def on_kwiji_command(message):
 async def on_e10din_command(message):
     await message.send("https://cdn.discordapp.com/attachments/1072494728492359732/1368008973973852170/IMG_5306.jpg?ex=6816a923&is=681557a3&hm=00904f1d19b05ea742279044e907915bd91834cc34260289c2f3f68f98985128&")
 
+@bot.command(name='pOK')
+async def on_pok_command(message):
+    await message.send("If you haven't heard already, he died in a terrible accident. He was trying to get a picture of his dog Kuma and he slipped on a banana peel and fell onto a cactus directly on his... well you know. He was in the hospital for a few days but he didn't make it. He was only 32 years old. He was a great guy and he will be missed.")
+
 @bot.command(name='roll')
 async def on_roll_command(message, *, arg):
     if not arg.isdigit():
