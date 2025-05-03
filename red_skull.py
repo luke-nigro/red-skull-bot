@@ -50,6 +50,11 @@ async def on_e10din_command(message):
 async def on_pok_command(message):
     await message.send("If you haven't heard already, he died in a terrible accident. He was trying to get a picture of his dog Kuma and he slipped on a banana peel and fell onto a cactus directly on his... well you know. He was in the hospital for a few days but he didn't make it. He was only 32 years old. He was a great guy and he will be missed.")
 
+# Blue footed boobies
+@bot.command(name='boobies')
+async def on_boobies_command(message):
+    await message.send("https://images.newscientist.com/wp-content/uploads/2014/05/dn25505-1_800.jpg")
+
 @bot.command(name='roll')
 async def on_roll_command(message, *, arg):
     if not arg.isdigit():
