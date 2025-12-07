@@ -1,1 +1,0 @@
-worker: python red_skull.py

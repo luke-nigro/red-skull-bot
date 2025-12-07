@@ -62,12 +62,13 @@ class EmojiTracker(commands.Cog):
         async with self.pool.acquire() as conn:
             await conn.execute(query, guild_id, user_id, emoji_id, is_reaction)
 
-    def resolve_emoji(self, guild, emoji_key):
-        """Helper to make emojis look nice in the chat."""
-        if emoji_key.isdigit():
-            emoji_obj = guild.get_emoji(int(emoji_key))
-            return str(emoji_obj) if emoji_obj else f"[Deleted ID: {emoji_key}]"
-        return emoji_key
+    def resolve_emoji(self, emoji_key):
+            """Helper to make emojis look nice in the chat."""
+            if emoji_key.isdigit():
+                # Uses the bot's global cache to find the emoji
+                emoji_obj = self.bot.get_emoji(int(emoji_key))
+                return str(emoji_obj) if emoji_obj else f"[Deleted ID: {emoji_key}]"
+            return emoji_key
 
     # --- Event Listeners ---
 
@@ -158,7 +159,7 @@ class EmojiTracker(commands.Cog):
         # Format Message
         lines = []
         for i, row in enumerate(rows, 1):
-            emoji_display = self.resolve_emoji(ctx.guild, row['emoji_id'])
+            emoji_display = self.resolve_emoji(row['emoji_id'])
             count = row['usage_count'] if target else row['total']
             lines.append(f"**{i}. {emoji_display}** : {count}")
 
