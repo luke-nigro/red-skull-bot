@@ -1,196 +1,169 @@
 import discord
 from discord.ext import commands
-from typing import Optional
-import json
 import re
-from operator import itemgetter
 import os
+import asyncpg
+from typing import Optional
 
-# --- Configuration and Helper Functions ---
-DATA_FILE = "data/emoji_stats.json" 
+# Regex to find custom emojis
 CUSTOM_EMOJI_RE = re.compile(r"<a?:.+?:(\d+)>")
-
-def load_stats():
-    """Reads the stats from the JSON file."""
-    if not os.path.exists(DATA_FILE):
-        return {}
-    try:
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        print(f"Warning: {DATA_FILE} is corrupted. Returning empty stats.")
-        return {}
-
-def save_stats(stats):
-    """Writes the stats to the JSON file."""
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True) # Ensure data folder exists
-    with open(DATA_FILE, 'w') as f:
-        json.dump(stats, f, indent=4)
 
 class EmojiTracker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        
+        self.pool = None
+
+    async def cog_load(self):
+        """Called when the Cog is loaded. Sets up the DB connection."""
+        db_url = os.getenv('DATABASE_URL')
+        if not db_url:
+            print("❌ ERROR: DATABASE_URL not found. Emoji tracking will fail.")
+            return
+
+        # Fix for hosted databases: 'postgres://' must be 'postgresql://' for asyncpg
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+        try:
+            self.pool = await asyncpg.create_pool(db_url)
+            await self.create_table()
+            print("✅ Database connected and table verified.")
+        except Exception as e:
+            print(f"❌ Failed to connect to database: {e}")
+
+    async def create_table(self):
+        """Creates the SQL table if it doesn't exist."""
+        query = """
+        CREATE TABLE IF NOT EXISTS emoji_stats (
+            guild_id BIGINT,
+            user_id BIGINT,
+            emoji_id TEXT,
+            is_reaction BOOLEAN,
+            usage_count INTEGER DEFAULT 1,
+            PRIMARY KEY (guild_id, user_id, emoji_id, is_reaction)
+        );
+        """
+        if self.pool:
+            async with self.pool.acquire() as conn:
+                await conn.execute(query)
+
+    async def increment_usage(self, guild_id, user_id, emoji_id, is_reaction):
+        """Updates the count in the database securely."""
+        if not self.pool: 
+            return
+
+        # This SQL performs an "Upsert": Insert if new, Update if exists.
+        query = """
+        INSERT INTO emoji_stats (guild_id, user_id, emoji_id, is_reaction, usage_count)
+        VALUES ($1, $2, $3, $4, 1)
+        ON CONFLICT (guild_id, user_id, emoji_id, is_reaction)
+        DO UPDATE SET usage_count = emoji_stats.usage_count + 1;
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(query, guild_id, user_id, emoji_id, is_reaction)
+
     def resolve_emoji(self, guild, emoji_key):
-        """Resolves an emoji key (ID or name) into a displayable string."""
+        """Helper to make emojis look nice in the chat."""
         if emoji_key.isdigit():
             emoji_obj = guild.get_emoji(int(emoji_key))
             return str(emoji_obj) if emoji_obj else f"[Deleted ID: {emoji_key}]"
-        else:
-            return emoji_key
+        return emoji_key
 
-    # --- Event Listeners: Tracking ---
+    # --- Event Listeners ---
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        """Tracks custom emojis used directly in messages."""
-        if message.author.bot or not message.guild:
+        if message.author.bot or not message.guild: 
             return
 
-        stats = load_stats()
-        guild_id = str(message.guild.id)
-        user_id = str(message.author.id)
-
-        # Initialize full structure: messages, users, and reactions placeholders
-        stats.setdefault(guild_id, {"messages": {"overall": {}, "users": {}}, 
-                                    "reactions": {"overall": {}, "users": {}}})
-        message_stats = stats[guild_id]["messages"]
-        
         emoji_ids = CUSTOM_EMOJI_RE.findall(message.content)
-        
-        if not emoji_ids:
-            save_stats(stats)
-            return
+        if not emoji_ids: 
+             return
 
+        guild_id = message.guild.id
+        user_id = message.author.id
+
+        # Loop through found emojis and save them to DB
         for emoji_id in emoji_ids:
-            # 1. Update overall server usage
-            message_stats["overall"][emoji_id] = message_stats["overall"].get(emoji_id, 0) + 1
-            
-            # 2. Update user-specific usage
-            message_stats["users"].setdefault(user_id, {})
-            message_stats["users"][user_id][emoji_id] = message_stats["users"][user_id].get(emoji_id, 0) + 1
+            await self.increment_usage(guild_id, user_id, emoji_id, is_reaction=False)
 
-        save_stats(stats)
-            
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
-        """Tracks emojis used as reactions (adds)."""
-        if payload.user_id == self.bot.user.id or payload.guild_id is None:
+        if payload.user_id == self.bot.user.id or payload.guild_id is None: 
             return
 
-        stats = load_stats()
-        guild_id = str(payload.guild_id)
-        user_id = str(payload.user_id)
+        guild_id = payload.guild_id
+        user_id = payload.user_id
         
-        # Determine the emoji key (ID for custom, name for unicode)
+        # Determine emoji ID or Name
         emoji = payload.emoji
         emoji_key = str(emoji.id) if emoji.id else emoji.name
 
-        stats.setdefault(guild_id, {"messages": {"overall": {}, "users": {}}, 
-                                    "reactions": {"overall": {}, "users": {}}})
-        reaction_stats = stats[guild_id]["reactions"]
-
-        # 1. Update overall reaction count
-        reaction_stats["overall"][emoji_key] = reaction_stats["overall"].get(emoji_key, 0) + 1
-
-        # 2. Update user-specific reaction count
-        reaction_stats["users"].setdefault(user_id, {})
-        reaction_stats["users"][user_id][emoji_key] = reaction_stats["users"][user_id].get(emoji_key, 0) + 1
-
-        save_stats(stats)
+        await self.increment_usage(guild_id, user_id, emoji_key, is_reaction=True)
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload):
-        """Tracks emojis used as reactions (removals)."""
-        if payload.user_id == self.bot.user.id or payload.guild_id is None:
-            return
+        # We generally do not decrement counts on remove for historical tracking,
+        # but you can add that logic here if desired.
+        pass
 
-        stats = load_stats()
-        guild_id = str(payload.guild_id)
-        user_id = str(payload.user_id)
-        
-        if guild_id not in stats or "reactions" not in stats[guild_id]:
-            return
+    # --- Commands ---
 
-        emoji = payload.emoji
-        emoji_key = str(emoji.id) if emoji.id else emoji.name
-        reaction_stats = stats[guild_id]["reactions"]
-        user_reaction_stats = reaction_stats["users"].get(user_id, {})
-
-        # Decrement and clean up overall count
-        if reaction_stats["overall"].get(emoji_key, 0) > 0:
-            reaction_stats["overall"][emoji_key] -= 1
-            if reaction_stats["overall"][emoji_key] == 0:
-                del reaction_stats["overall"][emoji_key]
-
-        # Decrement and clean up user count
-        if user_reaction_stats.get(emoji_key, 0) > 0:
-            user_reaction_stats[emoji_key] -= 1
-            if user_reaction_stats[emoji_key] == 0:
-                del user_reaction_stats[emoji_key]
-                if not user_reaction_stats:
-                    del reaction_stats["users"][user_id]
-            
-        save_stats(stats)
-    
-    # --- Commands: Displaying Statistics ---
     @commands.group(name="emojistats", aliases=["es"], invoke_without_command=True)
     async def emoji_stats(self, ctx, target: Optional[discord.Member] = None):
-        """Displays message emoji usage (Overall or for a specific user)."""
-        if target is None:
-            await self._display_stats(ctx, "messages", "overall")
-        else:
-            await self._display_stats(ctx, "messages", "user", target)
+        """Stats for messages."""
+        await self.show_stats(ctx, target, is_reaction=False)
+
     @emoji_stats.command(name="reactions")
     async def reactions_stats(self, ctx, target: Optional[discord.Member] = None):
-        """Displays emoji reaction statistics (Overall or for a specific user)."""
-        if target is None:
-            await self._display_stats(ctx, "reactions", "overall")
-        else:
-            await self._display_stats(ctx, "reactions", "user", target)
+        """Stats for reactions."""
+        await self.show_stats(ctx, target, is_reaction=True)
 
+    async def show_stats(self, ctx, target, is_reaction):
+        if not self.pool:
+            return await ctx.send("Database not connected.")
 
-    async def _display_stats(self, ctx, category: str, scope: str, target: Optional[discord.Member] = None):
-        """Internal function to handle all display logic."""
-        stats = load_stats()
-        guild_id = str(ctx.guild.id)
+        guild_id = ctx.guild.id
         
-        if guild_id not in stats:
-            return await ctx.send("No emoji usage has been recorded yet.")
-
-        source = stats[guild_id].get(category, {})
-        
-        if scope == "overall":
-            data_to_display = source.get("overall", {})
-            title_scope = "Server Overall"
+        # Build Query based on whether we want User stats or Server stats
+        if target:
+            # User Specific
+            query = """
+                SELECT emoji_id, usage_count FROM emoji_stats
+                WHERE guild_id = $1 AND user_id = $2 AND is_reaction = $3
+                ORDER BY usage_count DESC
+                LIMIT 10;
+            """
+            args = (guild_id, target.id, is_reaction)
+            title = f"👤 {target.display_name}'s {'Reaction' if is_reaction else 'Message'} Emojis"
         else:
-            if target is None:
-                return await ctx.send("Please specify a user.")
-            user_id = str(target.id)
-            data_to_display = source.get("users", {}).get(user_id, {})
-            title_scope = f"{target.display_name}'s"
-            
-        title_category = "Message Emoji" if category == "messages" else "Reaction Emoji"
-        title = f"📊 {title_scope} {title_category} Usage"
+            # Server Overall (Summing up all users)
+            query = """
+                SELECT emoji_id, SUM(usage_count) as total FROM emoji_stats
+                WHERE guild_id = $1 AND is_reaction = $2
+                GROUP BY emoji_id
+                ORDER BY total DESC
+                LIMIT 10;
+            """
+            args = (guild_id, is_reaction)
+            title = f"📊 Server {'Reaction' if is_reaction else 'Message'} Emojis"
 
-        if not data_to_display:
-            await ctx.send(f"No {category} usage recorded for {title_scope.lower()}.")
-            return
+        # Fetch Data
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(query, *args)
 
-        sorted_stats = sorted(data_to_display.items(), key=itemgetter(1), reverse=True)[:10]
+        if not rows:
+            return await ctx.send("No stats recorded yet.")
 
-        response = []
-        for rank, (emoji_key, count) in enumerate(sorted_stats, start=1):
-            emoji_display = self.resolve_emoji(ctx.guild, emoji_key)
-            response.append(f"**{rank}. {emoji_display}**: {count} uses")
-            
-        embed = discord.Embed(
-            title=title,
-            description="\n".join(response),
-            color=discord.Color.blue()
-        )
+        # Format Message
+        lines = []
+        for i, row in enumerate(rows, 1):
+            emoji_display = self.resolve_emoji(ctx.guild, row['emoji_id'])
+            count = row['usage_count'] if target else row['total']
+            lines.append(f"**{i}. {emoji_display}** : {count}")
+
+        embed = discord.Embed(title=title, description="\n".join(lines), color=discord.Color.gold())
         await ctx.send(embed=embed)
-
 
 async def setup(bot):
     await bot.add_cog(EmojiTracker(bot))

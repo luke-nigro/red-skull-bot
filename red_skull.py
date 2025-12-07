@@ -5,6 +5,7 @@ import discord
 from discord import Embed
 from discord.ext import commands
 import aiohttp  # Add this import for HTTP requests
+from aiohttp import web
 
 load_dotenv()
 
@@ -100,16 +101,35 @@ async def on_dog_command(message):
             else:
                 await message.send("No dogs for you, this probably means you're a terrible person.")
 
+async def health_check(request):
+    return web.Response(text="Bot is alive!")
+
+async def start_server():
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    # Render provides the PORT variable. Default to 8080 if not found.
+    port = int(os.getenv("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"🔗 Web server started on port {port}")
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
-    
+        
+    # --- START THE FAKE WEB SERVER FOR RENDER ---
+    # This prevents the "Port scan timeout" error
+    bot.loop.create_task(start_server()) 
+    # --------------------------------------------
+
     # Load the new emoji tracking cog
     try:
         await bot.load_extension('cogs.emoji_tracker')
         print("Successfully loaded EmojiTracker cog.")
     except commands.ExtensionAlreadyLoaded:
-        print("EmojiTracker cog was already loaded.")
+        pass 
     except Exception as e:
         print(f"Failed to load EmojiTracker cog: {e}")
 
@@ -133,6 +153,6 @@ async def on_message(message):
 
     # Logic B: Cheney Check
     if 'cheney' in content_lower:
-        await message.reply("Shut up you idiot that’s not why the Dems lost the election.")
+        await message.reply("Shut up you idiot that's not why the Dems lost the election.")
 
 bot.run(TOKEN)

@@ -3,3 +3,4 @@ discord.py==2.1.0
 asyncio
 aiohttp
 dotenv
+asyncpg
