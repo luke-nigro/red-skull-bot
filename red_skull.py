@@ -114,4 +114,20 @@ async def on_cheney_message(message):
     if 'cheney' in message.content.lower():
         await message.reply("Shut up you idiot that’s not why the Dems lost the election.")
 
+@bot.event
+async def on_ready():
+    # This is the ideal place to ensure cogs are loaded only once after connection.
+    print(f'Logged in as {bot.user}')
+    
+    # Load the new emoji tracking cog
+    try:
+        await bot.load_extension('cogs.emoji_tracker')
+        print("Successfully loaded EmojiTracker cog.")
+    except commands.ExtensionAlreadyLoaded:
+        # If the bot reconnects rapidly, the extension might already be loaded.
+        pass 
+    except Exception as e:
+        # Catch any errors during loading
+        print(f"Failed to load EmojiTracker cog: {e}")
+
 bot.run(TOKEN)
