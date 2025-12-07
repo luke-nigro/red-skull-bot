@@ -65,9 +65,14 @@ class EmojiTracker(commands.Cog):
     def resolve_emoji(self, emoji_key):
             """Helper to make emojis look nice in the chat."""
             if emoji_key.isdigit():
-                # Uses the bot's global cache to find the emoji
+                # Try to find the emoji in the bot's cache
                 emoji_obj = self.bot.get_emoji(int(emoji_key))
-                return str(emoji_obj) if emoji_obj else f"[Deleted ID: {emoji_key}]"
+                if emoji_obj:
+                    return str(emoji_obj)
+                else:
+                    # If not found (e.g. Nitro emoji from another server), 
+                    # return a link to the image so you can still see it.
+                    return f"[`🔗 Image`](https://cdn.discordapp.com/emojis/{emoji_key}.png)"
             return emoji_key
 
     # --- Event Listeners ---
@@ -161,7 +166,7 @@ class EmojiTracker(commands.Cog):
         for i, row in enumerate(rows, 1):
             emoji_display = self.resolve_emoji(row['emoji_id'])
             count = row['usage_count'] if target else row['total']
-            lines.append(f"**{i}. {emoji_display}** : {count}")
+            lines.append(f"**{i}.** {emoji_display} : {count}")
 
         embed = discord.Embed(title=title, description="\n".join(lines), color=discord.Color.gold())
         await ctx.send(embed=embed)
