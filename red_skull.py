@@ -101,22 +101,7 @@ async def on_dog_command(message):
                 await message.send("No dogs for you, this probably means you're a terrible person.")
 
 @bot.event
-async def on_cringe_message(message):
-    await bot.process_commands(message)
-    if 'cringe' in message.content.lower():
-        roll = random.randint(1, 100)
-        if roll == 1:
-            await message.reply("you're cringe bro")
-
-@bot.event
-async def on_cheney_message(message):
-    await bot.process_commands(message)
-    if 'cheney' in message.content.lower():
-        await message.reply("Shut up you idiot that’s not why the Dems lost the election.")
-
-@bot.event
 async def on_ready():
-    # This is the ideal place to ensure cogs are loaded only once after connection.
     print(f'Logged in as {bot.user}')
     
     # Load the new emoji tracking cog
@@ -124,10 +109,30 @@ async def on_ready():
         await bot.load_extension('cogs.emoji_tracker')
         print("Successfully loaded EmojiTracker cog.")
     except commands.ExtensionAlreadyLoaded:
-        # If the bot reconnects rapidly, the extension might already be loaded.
-        pass 
+        print("EmojiTracker cog was already loaded.")
     except Exception as e:
-        # Catch any errors during loading
         print(f"Failed to load EmojiTracker cog: {e}")
+
+@bot.event
+async def on_message(message):
+    # 1. Prevent infinite loops (bot replying to itself)
+    if message.author == bot.user:
+        return
+
+    # 2. Process Commands FIRST (so !skull, !ban etc work)
+    await bot.process_commands(message)
+
+    # 3. Custom Logic
+    content_lower = message.content.lower()
+
+    # Logic A: Cringe Check
+    if 'cringe' in content_lower:
+        roll = random.randint(1, 100)
+        if roll == 1:
+            await message.reply("you're cringe bro")
+
+    # Logic B: Cheney Check
+    if 'cheney' in content_lower:
+        await message.reply("Shut up you idiot that’s not why the Dems lost the election.")
 
 bot.run(TOKEN)
