@@ -1,11 +1,16 @@
 import os
 import random
+from dotenv import load_dotenv
 import discord
 from discord import Embed
 from discord.ext import commands
 import aiohttp  # Add this import for HTTP requests
 
+load_dotenv()
+
 TOKEN = os.getenv('DISCORD_TOKEN')
+if TOKEN is None:
+    raise ValueError('DISCORD_TOKEN environment variable is not set')
 embed = Embed()
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
