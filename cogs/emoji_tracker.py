@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import re
 import os
-import asyncpg
+import asyncpg # type: ignore
 from typing import Optional
 
 # Regex to find custom emojis

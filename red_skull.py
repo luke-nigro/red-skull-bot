@@ -56,6 +56,10 @@ async def on_e10din_command(message):
 async def on_pok_command(message):
     await message.send("If you haven't heard already, he died in a terrible accident. He was trying to get a picture of his dog Kuma and he slipped on a banana peel and fell onto a cactus directly on his... well you know. He was in the hospital for a few days but he didn't make it. He was only 32 years old. He was a great guy and he will be missed.")
 
+@bot.command(name='formande')
+async def on_formande_command(message):
+    await message.send("https://cdn.discordapp.com/attachments/1073304255567515648/1447648151723966736/image.png?ex=693862e7&is=69371167&hm=1633638b7c1834496f8ab4424ae28888a6273a52efe1eb49df2b35bace5ef50f&")
+
 # Blue footed boobies
 @bot.command(name='boobies')
 async def on_boobies_command(message):
