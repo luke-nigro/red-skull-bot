@@ -65,6 +65,10 @@ async def on_formande_command(message):
 async def on_boobies_command(message):
     await message.send("https://images.newscientist.com/wp-content/uploads/2014/05/dn25505-1_800.jpg")
 
+@bot.command(name='butthole')
+async def on_butthole_command(message):
+    await message.send("https://cdn.discordapp.com/attachments/1073304255567515648/1486179078427115701/unknown.png?ex=69c53860&is=69c3e6e0&hm=f569f8387ec34a2b6031d21cc00276875bdcdae1cc6fdf5f29ae129eb8db043d&")
+
 @bot.command(name='roll')
 async def on_roll_command(message, *, arg):
     if not arg.isdigit():
