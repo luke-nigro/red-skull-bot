@@ -1,9 +1,12 @@
+import logging
 import discord
 from discord.ext import commands
 import re
 import os
 import asyncpg # type: ignore
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 # Regex to find custom emojis
 CUSTOM_EMOJI_RE = re.compile(r"<a?:.+?:(\d+)>")
@@ -14,10 +17,9 @@ class EmojiTracker(commands.Cog):
         self.pool = None
 
     async def cog_load(self):
-        """Called when the Cog is loaded. Sets up the DB connection."""
         db_url = os.getenv('DATABASE_URL')
         if not db_url:
-            print("❌ ERROR: DATABASE_URL not found. Emoji tracking will fail.")
+            log.error("DATABASE_URL not found. Emoji tracking will fail.")
             return
 
         # Fix for hosted databases: 'postgres://' must be 'postgresql://' for asyncpg
@@ -27,12 +29,15 @@ class EmojiTracker(commands.Cog):
         try:
             self.pool = await asyncpg.create_pool(db_url)
             await self.create_table()
-            print("✅ Database connected and table verified.")
+            log.info("Database connected and table verified.")
         except Exception as e:
-            print(f"❌ Failed to connect to database: {e}")
+            log.error("Failed to connect to database: %s", e)
+
+    async def cog_unload(self):
+        if self.pool:
+            await self.pool.close()
 
     async def create_table(self):
-        """Creates the SQL table if it doesn't exist."""
         query = """
         CREATE TABLE IF NOT EXISTS emoji_stats (
             guild_id BIGINT,
@@ -48,11 +53,9 @@ class EmojiTracker(commands.Cog):
                 await conn.execute(query)
 
     async def increment_usage(self, guild_id, user_id, emoji_id, is_reaction):
-        """Updates the count in the database securely."""
-        if not self.pool: 
+        if not self.pool:
             return
 
-        # This SQL performs an "Upsert": Insert if new, Update if exists.
         query = """
         INSERT INTO emoji_stats (guild_id, user_id, emoji_id, is_reaction, usage_count)
         VALUES ($1, $2, $3, $4, 1)
@@ -63,45 +66,38 @@ class EmojiTracker(commands.Cog):
             await conn.execute(query, guild_id, user_id, emoji_id, is_reaction)
 
     def resolve_emoji(self, emoji_key):
-            """Helper to make emojis look nice in the chat."""
-            if emoji_key.isdigit():
-                # Try to find the emoji in the bot's cache
-                emoji_obj = self.bot.get_emoji(int(emoji_key))
-                if emoji_obj:
-                    return str(emoji_obj)
-                else:
-                    # If not found (e.g. Nitro emoji from another server), 
-                    # return a link to the image so you can still see it.
-                    return f"[`🔗 Image`](https://cdn.discordapp.com/emojis/{emoji_key}.png)"
-            return emoji_key
+        if emoji_key.isdigit():
+            emoji_obj = self.bot.get_emoji(int(emoji_key))
+            if emoji_obj:
+                return str(emoji_obj)
+            return f"[`🔗 Image`](https://cdn.discordapp.com/emojis/{emoji_key}.png)"
+        return emoji_key
 
     # --- Event Listeners ---
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot or not message.guild: 
+        if message.author.bot or not message.guild:
             return
 
         emoji_ids = CUSTOM_EMOJI_RE.findall(message.content)
-        if not emoji_ids: 
-             return
+        if not emoji_ids:
+            return
 
         guild_id = message.guild.id
         user_id = message.author.id
 
-        # Loop through found emojis and save them to DB
         for emoji_id in emoji_ids:
             await self.increment_usage(guild_id, user_id, emoji_id, is_reaction=False)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
-        if payload.user_id == self.bot.user.id or payload.guild_id is None: 
+        if payload.user_id == self.bot.user.id or payload.guild_id is None:
             return
 
         guild_id = payload.guild_id
         user_id = payload.user_id
-        
-        # Determine emoji ID or Name
+
         emoji = payload.emoji
         emoji_key = str(emoji.id) if emoji.id else emoji.name
 
@@ -109,8 +105,6 @@ class EmojiTracker(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload):
-        # We generally do not decrement counts on remove for historical tracking,
-        # but you can add that logic here if desired.
         pass
 
     # --- Commands ---
@@ -130,10 +124,8 @@ class EmojiTracker(commands.Cog):
             return await ctx.send("Database not connected.")
 
         guild_id = ctx.guild.id
-        
-        # Build Query based on whether we want User stats or Server stats
+
         if target:
-            # User Specific
             query = """
                 SELECT emoji_id, usage_count FROM emoji_stats
                 WHERE guild_id = $1 AND user_id = $2 AND is_reaction = $3
@@ -143,7 +135,6 @@ class EmojiTracker(commands.Cog):
             args = (guild_id, target.id, is_reaction)
             title = f"👤 {target.display_name}'s {'Reaction' if is_reaction else 'Message'} Emojis"
         else:
-            # Server Overall (Summing up all users)
             query = """
                 SELECT emoji_id, SUM(usage_count) as total FROM emoji_stats
                 WHERE guild_id = $1 AND is_reaction = $2
@@ -154,14 +145,12 @@ class EmojiTracker(commands.Cog):
             args = (guild_id, is_reaction)
             title = f"📊 Server {'Reaction' if is_reaction else 'Message'} Emojis"
 
-        # Fetch Data
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(query, *args)
 
         if not rows:
             return await ctx.send("No stats recorded yet.")
 
-        # Format Message
         lines = []
         for i, row in enumerate(rows, 1):
             emoji_display = self.resolve_emoji(row['emoji_id'])

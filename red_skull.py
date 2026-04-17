@@ -1,20 +1,34 @@
+import asyncio
+import logging
 import os
 import random
 from dotenv import load_dotenv
 import discord
-from discord import Embed
 from discord.ext import commands
-import aiohttp  # Add this import for HTTP requests
+import aiohttp
 from aiohttp import web
 
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+log = logging.getLogger(__name__)
+
 TOKEN = os.getenv('DISCORD_TOKEN')
 if TOKEN is None:
     raise ValueError('DISCORD_TOKEN environment variable is not set')
-embed = Embed()
 
-bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
+_API_TIMEOUT = aiohttp.ClientTimeout(total=10)
+
+class RedSkullBot(commands.Bot):
+    async def setup_hook(self):
+        asyncio.create_task(start_server())
+        try:
+            await self.load_extension('cogs.emoji_tracker')
+            log.info("Loaded EmojiTracker cog.")
+        except Exception as e:
+            log.error("Failed to load EmojiTracker cog: %s", e)
+
+bot = RedSkullBot(command_prefix='!', intents=discord.Intents.all())
 
 @bot.command(name='skull')
 async def on_skull_command(message):
@@ -30,7 +44,7 @@ async def on_bonk_command(message):
 
 @bot.command(name='ban')
 async def on_ban_command(message, *, arg):
-    await message.send(f'User {arg} has been permanently banned from the server, what a loser! <:day:1072575755256598559>')
+    await message.send(f'User {arg[:100]} has been permanently banned from the server, what a loser! <:day:1072575755256598559>')
 
 @bot.command(name='boc')
 async def on_boc_command(message):
@@ -75,39 +89,62 @@ async def on_roll_command(message, *, arg):
         await message.send("That's not a number you moron, pick a different number")
     elif int(arg) < 1:
         await message.send("Pick a number greater than 1 you moron")
+    elif int(arg) > 1_000_000:
+        await message.send("Pick a number less than 1,000,000 you moron")
     else:
         roll = random.randint(1, int(arg))
         await message.send(f"You rolled a {roll}.")
 
 @bot.command(name='meme')
 async def on_meme_command(message):
-    async with aiohttp.ClientSession() as session:
-        async with session.get('https://meme-api.com/gimme') as response:
-            if response.status == 200:
-                data = await response.json()
-                await message.send(data['url'])
-            else:
-                await message.send("Couldn't fetch a meme, and that's probably for the best tbh.")
+    try:
+        async with aiohttp.ClientSession(timeout=_API_TIMEOUT) as session:
+            async with session.get('https://meme-api.com/gimme') as response:
+                if response.status == 200:
+                    data = await response.json()
+                    url = data.get('url')
+                    if url:
+                        await message.send(url)
+                    else:
+                        await message.send("Couldn't fetch a meme, and that's probably for the best tbh.")
+                else:
+                    await message.send("Couldn't fetch a meme, and that's probably for the best tbh.")
+    except Exception:
+        await message.send("Couldn't fetch a meme, and that's probably for the best tbh.")
 
 @bot.command(name='cat')
 async def on_cat_command(message):
-    async with aiohttp.ClientSession() as session:
-        async with session.get('https://api.thecatapi.com/v1/images/search') as response:
-            if response.status == 200:
-                data = await response.json()
-                await message.send(data[0]['url'])
-            else:
-                await message.send("The cat distribution system did not choose you today.")
+    try:
+        async with aiohttp.ClientSession(timeout=_API_TIMEOUT) as session:
+            async with session.get('https://api.thecatapi.com/v1/images/search') as response:
+                if response.status == 200:
+                    data = await response.json()
+                    url = data[0].get('url') if data else None
+                    if url:
+                        await message.send(url)
+                    else:
+                        await message.send("The cat distribution system did not choose you today.")
+                else:
+                    await message.send("The cat distribution system did not choose you today.")
+    except Exception:
+        await message.send("The cat distribution system did not choose you today.")
 
 @bot.command(name='dog')
 async def on_dog_command(message):
-    async with aiohttp.ClientSession() as session:
-        async with session.get('https://dog.ceo/api/breeds/image/random') as response:
-            if response.status == 200:
-                data = await response.json()
-                await message.send(data['message'])
-            else:
-                await message.send("No dogs for you, this probably means you're a terrible person.")
+    try:
+        async with aiohttp.ClientSession(timeout=_API_TIMEOUT) as session:
+            async with session.get('https://dog.ceo/api/breeds/image/random') as response:
+                if response.status == 200:
+                    data = await response.json()
+                    url = data.get('message')
+                    if url:
+                        await message.send(url)
+                    else:
+                        await message.send("No dogs for you, this probably means you're a terrible person.")
+                else:
+                    await message.send("No dogs for you, this probably means you're a terrible person.")
+    except Exception:
+        await message.send("No dogs for you, this probably means you're a terrible person.")
 
 async def health_check(request):
     return web.Response(text="Bot is alive!")
@@ -117,49 +154,29 @@ async def start_server():
     app.router.add_get('/', health_check)
     runner = web.AppRunner(app)
     await runner.setup()
-    # Render provides the PORT variable. Default to 8080 if not found.
     port = int(os.getenv("PORT", 8080))
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"🔗 Web server started on port {port}")
+    log.info("Web server started on port %d", port)
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user}')
-        
-    # --- START THE FAKE WEB SERVER FOR RENDER ---
-    # This prevents the "Port scan timeout" error
-    bot.loop.create_task(start_server()) 
-    # --------------------------------------------
-
-    # Load the new emoji tracking cog
-    try:
-        await bot.load_extension('cogs.emoji_tracker')
-        print("Successfully loaded EmojiTracker cog.")
-    except commands.ExtensionAlreadyLoaded:
-        pass 
-    except Exception as e:
-        print(f"Failed to load EmojiTracker cog: {e}")
+    log.info("Logged in as %s", bot.user)
 
 @bot.event
 async def on_message(message):
-    # 1. Prevent infinite loops (bot replying to itself)
     if message.author == bot.user:
         return
 
-    # 2. Process Commands FIRST (so !skull, !ban etc work)
     await bot.process_commands(message)
 
-    # 3. Custom Logic
     content_lower = message.content.lower()
 
-    # Logic A: Cringe Check
     if 'cringe' in content_lower:
         roll = random.randint(1, 100)
         if roll == 1:
             await message.reply("you're cringe bro")
 
-    # Logic B: Cheney Check
     if 'cheney' in content_lower:
         await message.reply("Shut up you idiot that's not why the Dems lost the election.")
 
