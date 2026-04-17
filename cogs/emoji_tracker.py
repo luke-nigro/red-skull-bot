@@ -29,7 +29,8 @@ class EmojiTracker(commands.Cog):
         try:
             self.pool = await asyncpg.create_pool(db_url)
             await self.create_table()
-            log.info("Database connected and table verified.")
+            await self.create_received_table()
+            log.info("Database connected and tables verified.")
         except Exception as e:
             log.error("Failed to connect to database: %s", e)
 
@@ -48,9 +49,21 @@ class EmojiTracker(commands.Cog):
             PRIMARY KEY (guild_id, user_id, emoji_id, is_reaction)
         );
         """
-        if self.pool:
-            async with self.pool.acquire() as conn:
-                await conn.execute(query)
+        async with self.pool.acquire() as conn:
+            await conn.execute(query)
+
+    async def create_received_table(self):
+        query = """
+        CREATE TABLE IF NOT EXISTS reaction_received_stats (
+            guild_id BIGINT,
+            recipient_id BIGINT,
+            emoji_name TEXT,
+            count INTEGER DEFAULT 1,
+            PRIMARY KEY (guild_id, recipient_id, emoji_name)
+        );
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(query)
 
     async def increment_usage(self, guild_id, user_id, emoji_id, is_reaction):
         if not self.pool:
@@ -64,6 +77,19 @@ class EmojiTracker(commands.Cog):
         """
         async with self.pool.acquire() as conn:
             await conn.execute(query, guild_id, user_id, emoji_id, is_reaction)
+
+    async def increment_received(self, guild_id, recipient_id, emoji_name):
+        if not self.pool:
+            return
+
+        query = """
+        INSERT INTO reaction_received_stats (guild_id, recipient_id, emoji_name, count)
+        VALUES ($1, $2, $3, 1)
+        ON CONFLICT (guild_id, recipient_id, emoji_name)
+        DO UPDATE SET count = reaction_received_stats.count + 1;
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(query, guild_id, recipient_id, emoji_name)
 
     def resolve_emoji(self, emoji_key):
         if emoji_key.isdigit():
@@ -97,11 +123,21 @@ class EmojiTracker(commands.Cog):
 
         guild_id = payload.guild_id
         user_id = payload.user_id
-
         emoji = payload.emoji
         emoji_key = str(emoji.id) if emoji.id else emoji.name
 
         await self.increment_usage(guild_id, user_id, emoji_key, is_reaction=True)
+
+        # Track who received the reaction (for leaderboards like !kekwboard)
+        if emoji.name:
+            channel = self.bot.get_channel(payload.channel_id)
+            if channel:
+                try:
+                    message = await channel.fetch_message(payload.message_id)
+                    if not message.author.bot:
+                        await self.increment_received(guild_id, message.author.id, emoji.name)
+                except (discord.NotFound, discord.Forbidden):
+                    pass
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload):
@@ -158,6 +194,39 @@ class EmojiTracker(commands.Cog):
             lines.append(f"**{i}.** {emoji_display} : {count}")
 
         embed = discord.Embed(title=title, description="\n".join(lines), color=discord.Color.gold())
+        await ctx.send(embed=embed)
+
+    @commands.command(name="kekwboard")
+    async def kekwboard(self, ctx):
+        """Ranks users by how many kekw reactions they've received."""
+        if not self.pool:
+            return await ctx.send("Database not connected.")
+
+        query = """
+            SELECT recipient_id, SUM(count) as total
+            FROM reaction_received_stats
+            WHERE guild_id = $1 AND emoji_name ILIKE 'kekw%'
+            GROUP BY recipient_id
+            ORDER BY total DESC
+            LIMIT 10;
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(query, ctx.guild.id)
+
+        if not rows:
+            return await ctx.send("No kekw reactions tracked yet.")
+
+        lines = []
+        for i, row in enumerate(rows, 1):
+            member = ctx.guild.get_member(row['recipient_id'])
+            name = member.display_name if member else f"<@{row['recipient_id']}>"
+            lines.append(f"**{i}.** {name} — {row['total']}")
+
+        embed = discord.Embed(
+            title="KEKW Leaderboard",
+            description="\n".join(lines),
+            color=discord.Color.red()
+        )
         await ctx.send(embed=embed)
 
 async def setup(bot):
