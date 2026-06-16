@@ -423,5 +423,38 @@ class EmojiTracker(commands.Cog):
         except discord.Forbidden:
             pass
 
+    @commands.command(name="poors")
+    async def poors(self, ctx):
+        """Show everyone with 0 or fewer kekws, poorest first."""
+        if not self.pool:
+            return await ctx.send("Database not connected.")
+
+        query = """
+        SELECT recipient_id, SUM(count) as balance
+        FROM reaction_received_stats
+        WHERE guild_id = $1 AND emoji_name ILIKE 'kekw%'
+        GROUP BY recipient_id
+        HAVING SUM(count) <= 0
+        ORDER BY balance ASC;
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(query, ctx.guild.id)
+
+        if not rows:
+            return await ctx.send("No poors found. Everyone is rich in kekws.")
+
+        lines = []
+        for i, row in enumerate(rows, 1):
+            member = ctx.guild.get_member(row['recipient_id'])
+            name = member.display_name if member else f"Unknown ({row['recipient_id']})"
+            lines.append(f"{i}. **{name}** — {row['balance']} kekws")
+
+        embed = discord.Embed(
+            title="💸 The Poors",
+            description="\n".join(lines),
+            color=discord.Color.dark_grey()
+        )
+        await ctx.send(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(EmojiTracker(bot))
