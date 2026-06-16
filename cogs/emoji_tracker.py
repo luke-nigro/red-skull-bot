@@ -1,5 +1,6 @@
 import logging
 import discord
+from discord import app_commands
 from discord.ext import commands
 import re
 import os
@@ -12,13 +13,14 @@ log = logging.getLogger(__name__)
 CUSTOM_EMOJI_RE = re.compile(r"<a?:.+?:(\d+)>")
 
 # Configuration
-KEKW_EMOJI_NAME_PATTERN = "kekw"  # matches emoji names starting with this (case-insensitive)
 KEKW_RESTRICTED_ROLE_NAME = "is poor"  # role name that blocks kekw usage
 
 class EmojiTracker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.pool = None
+        # In-memory cache: {guild_id: {emoji_id: group_name}}
+        self._economy_emojis = {}
 
     async def cog_load(self):
         db_url = os.getenv('DATABASE_URL')
@@ -34,6 +36,9 @@ class EmojiTracker(commands.Cog):
             self.pool = await asyncpg.create_pool(db_url)
             await self.create_table()
             await self.create_received_table()
+            await self.create_economy_emojis_table()
+            await self.migrate_kekw_balances()
+            await self.load_economy_emojis()
             log.info("Database connected and tables verified.")
         except Exception as e:
             log.error("Failed to connect to database: %s", e)
@@ -69,6 +74,60 @@ class EmojiTracker(commands.Cog):
         async with self.pool.acquire() as conn:
             await conn.execute(query)
 
+    async def create_economy_emojis_table(self):
+        query = """
+        CREATE TABLE IF NOT EXISTS economy_emojis (
+            guild_id BIGINT,
+            emoji_id BIGINT,
+            group_name TEXT NOT NULL DEFAULT 'kekw',
+            PRIMARY KEY (guild_id, emoji_id)
+        );
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(query)
+
+    async def load_economy_emojis(self):
+        """Load all registered economy emojis into memory."""
+        if not self.pool:
+            return
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT guild_id, emoji_id, group_name FROM economy_emojis")
+        self._economy_emojis = {}
+        for row in rows:
+            guild_id = row['guild_id']
+            if guild_id not in self._economy_emojis:
+                self._economy_emojis[guild_id] = {}
+            self._economy_emojis[guild_id][row['emoji_id']] = row['group_name']
+
+    async def migrate_kekw_balances(self):
+        """One-time migration: consolidate old kekw% entries into a single 'kekw' row per user."""
+        if not self.pool:
+            return
+        async with self.pool.acquire() as conn:
+            # Check if there are any old-style entries to migrate
+            check = await conn.fetchval(
+                "SELECT COUNT(*) FROM reaction_received_stats WHERE emoji_name ILIKE 'kekw%' AND emoji_name != 'kekw'"
+            )
+            if not check:
+                return
+
+            # Consolidate: sum all kekw% rows per (guild_id, recipient_id) into the 'kekw' row
+            await conn.execute("""
+                INSERT INTO reaction_received_stats (guild_id, recipient_id, emoji_name, count)
+                SELECT guild_id, recipient_id, 'kekw', SUM(count)
+                FROM reaction_received_stats
+                WHERE emoji_name ILIKE 'kekw%'
+                GROUP BY guild_id, recipient_id
+                ON CONFLICT (guild_id, recipient_id, emoji_name)
+                DO UPDATE SET count = EXCLUDED.count;
+            """)
+
+            # Delete the old fragmented rows
+            await conn.execute(
+                "DELETE FROM reaction_received_stats WHERE emoji_name ILIKE 'kekw%' AND emoji_name != 'kekw'"
+            )
+            log.info("Migrated %d old kekw entries into consolidated 'kekw' balances", check)
+
     async def get_kekw_balance(self, guild_id, user_id):
         """Get a user's net kekw balance from reaction_received_stats."""
         if not self.pool:
@@ -76,14 +135,14 @@ class EmojiTracker(commands.Cog):
         query = """
         SELECT COALESCE(SUM(count), 0) as total
         FROM reaction_received_stats
-        WHERE guild_id = $1 AND recipient_id = $2 AND emoji_name ILIKE 'kekw%';
+        WHERE guild_id = $1 AND recipient_id = $2 AND emoji_name = 'kekw';
         """
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(query, guild_id, user_id)
         return row['total'] if row else 0
 
-    async def decrement_received(self, guild_id, user_id, emoji_name):
-        """Decrement a user's received count (costs them to use kekw)."""
+    async def decrement_received(self, guild_id, user_id, group_name):
+        """Decrement a user's balance for a group (costs them to use the emoji)."""
         if not self.pool:
             return
         query = """
@@ -93,7 +152,7 @@ class EmojiTracker(commands.Cog):
         DO UPDATE SET count = reaction_received_stats.count - 1;
         """
         async with self.pool.acquire() as conn:
-            await conn.execute(query, guild_id, user_id, emoji_name)
+            await conn.execute(query, guild_id, user_id, group_name)
 
     async def enforce_kekw_role(self, guild, member):
         """Add or remove the kekw restricted role based on kekwboard balance."""
@@ -112,11 +171,12 @@ class EmojiTracker(commands.Cog):
         except discord.Forbidden:
             log.warning("Missing permissions to manage roles for %s", member)
 
-    def is_kekw_emoji(self, emoji):
-        """Check if an emoji matches the kekw pattern."""
-        if emoji.name and emoji.name.lower().startswith(KEKW_EMOJI_NAME_PATTERN):
-            return True
-        return False
+    def is_economy_emoji(self, guild_id, emoji):
+        """Check if an emoji is registered in the economy. Returns group_name or None."""
+        if not emoji.id:
+            return None
+        guild_emojis = self._economy_emojis.get(guild_id, {})
+        return guild_emojis.get(emoji.id)
 
     async def increment_usage(self, guild_id, user_id, emoji_id, is_reaction):
         if not self.pool:
@@ -173,7 +233,12 @@ class EmojiTracker(commands.Cog):
                     log.warning("Missing permissions to create role in %s", guild.name)
                     continue
 
-
+            # Sync slash commands to this guild (instant)
+            try:
+                await self.bot.tree.sync(guild=guild)
+                log.info("Slash commands synced to %s", guild.name)
+            except Exception as e:
+                log.warning("Failed to sync slash commands to %s: %s", guild.name, e)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -209,12 +274,14 @@ class EmojiTracker(commands.Cog):
                 try:
                     message = await channel.fetch_message(payload.message_id)
                     if not message.author.bot:
-                        # Skip self-reactions for kekw economy
-                        if self.is_kekw_emoji(emoji) and message.author.id == user_id:
+                        group_name = self.is_economy_emoji(guild_id, emoji)
+
+                        # Skip self-reactions for economy emojis
+                        if group_name and message.author.id == user_id:
                             return
 
-                        # Block kekw usage if reactor has "is poor" role
-                        if self.is_kekw_emoji(emoji):
+                        # Block economy emoji usage if reactor has "is poor" role
+                        if group_name:
                             guild = self.bot.get_guild(guild_id)
                             if guild:
                                 reactor = guild.get_member(user_id)
@@ -230,19 +297,22 @@ class EmojiTracker(commands.Cog):
 
                         await self.increment_received(guild_id, message.author.id, emoji.name)
 
-                        # --- Kekw balance logic ---
-                        if self.is_kekw_emoji(emoji):
+                        # --- Economy balance logic ---
+                        if group_name:
                             guild = self.bot.get_guild(guild_id)
                             if guild:
-                                # Decrement the reactor's balance (costs them to use kekw)
+                                # Decrement the reactor's balance (costs them to use the emoji)
                                 reactor = guild.get_member(user_id)
                                 if reactor and not reactor.bot:
-                                    await self.decrement_received(guild_id, user_id, emoji.name)
+                                    await self.decrement_received(guild_id, user_id, group_name)
                                     await self.enforce_kekw_role(guild, reactor)
 
-                                # Recipient just got +1 from increment_received above, update their role
+                                # Recipient balance handled by increment_received above
+                                # (emoji.name stored separately; group_name credit only if name != group)
                                 recipient = guild.get_member(message.author.id)
                                 if recipient and not recipient.bot:
+                                    if emoji.name != group_name:
+                                        await self.increment_received(guild_id, message.author.id, group_name)
                                     await self.enforce_kekw_role(guild, recipient)
 
                 except (discord.NotFound, discord.Forbidden):
@@ -260,8 +330,9 @@ class EmojiTracker(commands.Cog):
         if not emoji.name:
             return
 
-        # Only process kekw removals
-        if not self.is_kekw_emoji(emoji):
+        # Only process economy emoji removals
+        group_name = self.is_economy_emoji(guild_id, emoji)
+        if not group_name:
             return
 
         channel = self.bot.get_channel(payload.channel_id)
@@ -282,13 +353,13 @@ class EmojiTracker(commands.Cog):
             if guild:
                 reactor = guild.get_member(user_id)
                 if reactor and not reactor.bot:
-                    await self.increment_received(guild_id, user_id, emoji.name)
+                    await self.increment_received(guild_id, user_id, group_name)
                     await self.enforce_kekw_role(guild, reactor)
 
-                # Deduct from the recipient (-1 since they lost the kekw)
+                # Deduct from the recipient (-1 since they lost the emoji)
                 recipient = guild.get_member(message.author.id)
                 if recipient and not recipient.bot:
-                    await self.decrement_received(guild_id, message.author.id, emoji.name)
+                    await self.decrement_received(guild_id, message.author.id, group_name)
                     await self.enforce_kekw_role(guild, recipient)
 
         except (discord.NotFound, discord.Forbidden):
@@ -356,7 +427,7 @@ class EmojiTracker(commands.Cog):
         query = """
             SELECT recipient_id, SUM(count) as total
             FROM reaction_received_stats
-            WHERE guild_id = $1 AND emoji_name ILIKE 'kekw%'
+            WHERE guild_id = $1 AND emoji_name = 'kekw'
             GROUP BY recipient_id
             ORDER BY total DESC
             LIMIT 10;
@@ -401,32 +472,114 @@ class EmojiTracker(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name="kekwmint", hidden=True)
-    async def kekwmint(self, ctx, target: discord.Member, amount: int = 1):
-        """Mint kekws into a user's balance. Tangster/Centerist role only."""
+    async def kekwmint_prefix(self, ctx):
+        """Disabled - use /kekwmint instead."""
+        pass
+
+    @app_commands.command(name="kekwmint", description="Mint kekws into a user's balance")
+    @app_commands.describe(target="User to mint kekws for", amount="Amount to mint (default 1)")
+    async def kekwmint(self, interaction: discord.Interaction, target: discord.Member, amount: int = 1):
         MINT_ROLE_IDS = {1071629030408847371, 1071861949752676372}
-        if not any(r.id in MINT_ROLE_IDS for r in ctx.author.roles):
-            return  # Silently ignore
+        if not any(r.id in MINT_ROLE_IDS for r in interaction.user.roles):
+            return await interaction.response.send_message("No permission.", ephemeral=True)
 
         if not self.pool:
-            return
+            return await interaction.response.send_message("DB not connected.", ephemeral=True)
 
         query = """
         INSERT INTO reaction_received_stats (guild_id, recipient_id, emoji_name, count)
-        VALUES ($1, $2, 'kekw_mint', $3)
+        VALUES ($1, $2, 'kekw', $3)
         ON CONFLICT (guild_id, recipient_id, emoji_name)
         DO UPDATE SET count = reaction_received_stats.count + $3;
         """
         async with self.pool.acquire() as conn:
-            await conn.execute(query, ctx.guild.id, target.id, amount)
+            await conn.execute(query, interaction.guild.id, target.id, amount)
 
-        # Enforce role in case they were restricted
-        await self.enforce_kekw_role(ctx.guild, target)
+        await self.enforce_kekw_role(interaction.guild, target)
+        await interaction.response.send_message(f"Minted {amount} kekws for {target.display_name}", ephemeral=True)
 
-        # Delete the command message to hide it
-        try:
-            await ctx.message.delete()
-        except discord.Forbidden:
-            pass
+    @app_commands.command(name="kekwregister", description="Register an emoji as an economy emoji")
+    @app_commands.describe(emoji_id="The emoji ID to register", group_name="Economy group (default: kekw)")
+    async def kekwregister(self, interaction: discord.Interaction, emoji_id: str, group_name: str = "kekw"):
+        MINT_ROLE_IDS = {1071629030408847371, 1071861949752676372}
+        if not any(r.id in MINT_ROLE_IDS for r in interaction.user.roles):
+            return await interaction.response.send_message("No permission.", ephemeral=True)
+
+        if not self.pool:
+            return await interaction.response.send_message("DB not connected.", ephemeral=True)
+
+        # Parse emoji ID from string (supports raw ID or <:name:id> format)
+        match = re.search(r'(\d+)', emoji_id)
+        if not match:
+            return await interaction.response.send_message("Invalid emoji. Provide the emoji or its ID.", ephemeral=True)
+        eid = int(match.group(1))
+
+        query = """
+        INSERT INTO economy_emojis (guild_id, emoji_id, group_name)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (guild_id, emoji_id)
+        DO UPDATE SET group_name = $3;
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(query, interaction.guild.id, eid, group_name)
+
+        if interaction.guild.id not in self._economy_emojis:
+            self._economy_emojis[interaction.guild.id] = {}
+        self._economy_emojis[interaction.guild.id][eid] = group_name
+
+        emoji_obj = self.bot.get_emoji(eid)
+        display = str(emoji_obj) if emoji_obj else f"ID {eid}"
+        await interaction.response.send_message(f"✅ Registered {display} as economy emoji (group: `{group_name}`)", ephemeral=True)
+
+    @app_commands.command(name="kekwunregister", description="Unregister an emoji from the economy")
+    @app_commands.describe(emoji_id="The emoji ID to unregister")
+    async def kekwunregister(self, interaction: discord.Interaction, emoji_id: str):
+        MINT_ROLE_IDS = {1071629030408847371, 1071861949752676372}
+        if not any(r.id in MINT_ROLE_IDS for r in interaction.user.roles):
+            return await interaction.response.send_message("No permission.", ephemeral=True)
+
+        if not self.pool:
+            return await interaction.response.send_message("DB not connected.", ephemeral=True)
+
+        match = re.search(r'(\d+)', emoji_id)
+        if not match:
+            return await interaction.response.send_message("Invalid emoji. Provide the emoji or its ID.", ephemeral=True)
+        eid = int(match.group(1))
+
+        query = "DELETE FROM economy_emojis WHERE guild_id = $1 AND emoji_id = $2;"
+        async with self.pool.acquire() as conn:
+            await conn.execute(query, interaction.guild.id, eid)
+
+        guild_emojis = self._economy_emojis.get(interaction.guild.id, {})
+        guild_emojis.pop(eid, None)
+
+        await interaction.response.send_message(f"❌ Unregistered emoji ID {eid} from economy", ephemeral=True)
+
+    @app_commands.command(name="taxes", description="Decrement everyone's kekw balance")
+    @app_commands.describe(amount="Amount to tax (default 1)")
+    async def taxes(self, interaction: discord.Interaction, amount: int = 1):
+        MINT_ROLE_IDS = {1071629030408847371, 1071861949752676372}
+        if not any(r.id in MINT_ROLE_IDS for r in interaction.user.roles):
+            return await interaction.response.send_message("No permission.", ephemeral=True)
+
+        if not self.pool:
+            return await interaction.response.send_message("DB not connected.", ephemeral=True)
+
+        query = """
+        UPDATE reaction_received_stats
+        SET count = count - $2
+        WHERE guild_id = $1 AND emoji_name = 'kekw';
+        """
+        async with self.pool.acquire() as conn:
+            await conn.execute(query, interaction.guild.id, amount)
+
+        await interaction.response.send_message(f"💀 Taxed everyone {amount} kekws", ephemeral=True)
+
+        # Enforce roles for anyone who just went to 0 or below
+        for member in interaction.guild.members:
+            if member.bot:
+                continue
+            await self.enforce_kekw_role(interaction.guild, member)
 
     @commands.command(name="poors")
     async def poors(self, ctx):
@@ -437,7 +590,7 @@ class EmojiTracker(commands.Cog):
         query = """
         SELECT recipient_id, SUM(count) as balance
         FROM reaction_received_stats
-        WHERE guild_id = $1 AND emoji_name ILIKE 'kekw%'
+        WHERE guild_id = $1 AND emoji_name = 'kekw'
         GROUP BY recipient_id
         HAVING SUM(count) <= 0
         ORDER BY balance ASC;
