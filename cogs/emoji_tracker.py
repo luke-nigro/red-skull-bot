@@ -173,17 +173,7 @@ class EmojiTracker(commands.Cog):
                     log.warning("Missing permissions to create role in %s", guild.name)
                     continue
 
-            # Restrict kekw emojis so the role cannot use them
-            if restricted_role:
-                # Build the set of roles that CAN use kekw emojis (all roles except restricted)
-                allowed_roles = [r for r in guild.roles if r != restricted_role]
-                for emoji in guild.emojis:
-                    if emoji.name and emoji.name.lower().startswith(KEKW_EMOJI_NAME_PATTERN):
-                        try:
-                            await emoji.edit(roles=allowed_roles, reason="Restrict kekw emoji from kekw restricted role")
-                            log.info("Restricted emoji %s from '%s' role", emoji.name, KEKW_RESTRICTED_ROLE_NAME)
-                        except discord.Forbidden:
-                            log.warning("Missing Manage Emojis permission to restrict %s", emoji.name)
+
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -222,6 +212,21 @@ class EmojiTracker(commands.Cog):
                         # Skip self-reactions for kekw economy
                         if self.is_kekw_emoji(emoji) and message.author.id == user_id:
                             return
+
+                        # Block kekw usage if reactor has "is poor" role
+                        if self.is_kekw_emoji(emoji):
+                            guild = self.bot.get_guild(guild_id)
+                            if guild:
+                                reactor = guild.get_member(user_id)
+                                if reactor:
+                                    role = discord.utils.get(guild.roles, name=KEKW_RESTRICTED_ROLE_NAME)
+                                    if role and role in reactor.roles:
+                                        # Remove the reaction and bail
+                                        try:
+                                            await message.remove_reaction(emoji, reactor)
+                                        except discord.Forbidden:
+                                            pass
+                                        return
 
                         await self.increment_received(guild_id, message.author.id, emoji.name)
 
