@@ -235,6 +235,7 @@ class EmojiTracker(commands.Cog):
 
             # Sync slash commands to this guild (instant)
             try:
+                self.bot.tree.copy_global_to(guild=guild)
                 await self.bot.tree.sync(guild=guild)
                 log.info("Slash commands synced to %s", guild.name)
             except Exception as e:
