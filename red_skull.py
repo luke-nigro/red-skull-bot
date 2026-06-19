@@ -79,6 +79,16 @@ async def on_formande_command(message):
 async def on_boobies_command(message):
     await message.send("https://images.newscientist.com/wp-content/uploads/2014/05/dn25505-1_800.jpg")
 
+# Titmouses
+@bot.command(name='tits')
+async def on_tits_command(message):
+    await message.send("https://www.pennington.com/all-products/wild-bird/resources/-/media/Project/OneWeb/Pennington/Images/blog/Wild-Bird/Tufted-titmouse/Tufted-Titmouse-with-peanut.jpg")
+
+# Geese Honking
+@bot.command(name='honkers')
+async def on_honkers_command(message):
+    await message.send("https://i.ytimg.com/vi/6pbCr577RI0/mqdefault.jpg")
+
 @bot.command(name='butthole')
 async def on_butthole_command(message):
     await message.send("https://cdn.discordapp.com/attachments/1073304255567515648/1486179078427115701/unknown.png?ex=69c53860&is=69c3e6e0&hm=f569f8387ec34a2b6031d21cc00276875bdcdae1cc6fdf5f29ae129eb8db043d&")
