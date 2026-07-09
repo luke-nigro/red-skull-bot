@@ -93,6 +93,10 @@ async def on_honkers_command(message):
 async def on_butthole_command(message):
     await message.send("https://cdn.discordapp.com/attachments/1073304255567515648/1486179078427115701/unknown.png?ex=69c53860&is=69c3e6e0&hm=f569f8387ec34a2b6031d21cc00276875bdcdae1cc6fdf5f29ae129eb8db043d&")
 
+@bot.command(name="poop")
+async def on_poop_command(message):
+    await message.send("I can't be a bot because I just typed poop and it didn't get censored. I guess I'm a human after all.")
+
 @bot.command(name='roll')
 async def on_roll_command(message, *, arg):
     if not arg.isdigit():
